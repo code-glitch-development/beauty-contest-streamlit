@@ -232,6 +232,23 @@ with leaderboard_tab:
             st.success('Leading now: ' + ', '.join(result['winners']))
         else:
             st.info('No verified reveals within the selected window. Only matching reveals recorded on ' + LEADERBOARD_WINDOW_LABEL + ' count.')
+        if result['count']:
+            st.subheader('Top 3')
+            st.caption('Verified players only. Tied players share the same medal and rank.')
+            podium_columns = st.columns(3)
+            for rank, medal, place, column in zip(
+                    (1, 2, 3), ('🥇', '🥈', '🥉'),
+                    ('1st place', '2nd place', '3rd place'), podium_columns):
+                with column:
+                    with st.container(border=True):
+                        st.subheader(f'{medal} {place}')
+                        players = [row for row in result['rows']
+                                   if row['Status'] == 'Verified' and row['Rank'] == rank]
+                        for player in players:
+                            st.text(player['University ID'])
+                            st.metric('Chosen number', player['Number'])
+                        if not players:
+                            st.caption('No player at this rank yet.')
         if result['rows']:
             display = pd.DataFrame(result['rows'])[['Rank', 'University ID', 'Number', 'Distance', 'Status', 'Revealed at (UTC)']]
             display['Rank'] = display['Rank'].astype('Int64')
