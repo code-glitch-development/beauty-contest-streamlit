@@ -6,10 +6,15 @@ import math
 from datetime import datetime, timezone
 from statistics import mean
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 API_DEFAULT = 'https://script.google.com/macros/s/AKfycbyNZNOE1DYNbd4GbGTISJsGrnJ4PYCuip0yjSw3Lr8KkD6-kadKI9mfpKNfiAHEWb0Osw/exec'
 DEADLINE = datetime(2026, 11, 15, 22, 59, 59, tzinfo=timezone.utc)
 REVEAL_OPEN = datetime(2026, 11, 15, 23, 0, 0, tzinfo=timezone.utc)
+PARIS = ZoneInfo('Europe/Paris')
+LEADERBOARD_REVEAL_START = datetime(2026, 11, 16, 13, 0, 0, tzinfo=PARIS)
+LEADERBOARD_REVEAL_END = datetime(2026, 11, 16, 18, 0, 0, tzinfo=PARIS)
+LEADERBOARD_WINDOW_LABEL = '16 November 2026, 13:00:00–18:00:00 Europe/Paris (inclusive)'
 
 
 def commitment(uid, number, nonce):
@@ -36,6 +41,17 @@ def parse_ts(value):
         return ts.astimezone(timezone.utc) if ts.tzinfo else None
     except (TypeError, ValueError):
         return None
+
+
+def filter_leaderboard_reveals(reveals):
+    """Filter server timestamps before choosing each student's latest reveal."""
+    return [row for row in reveals
+            if (ts := parse_ts(row.get('timestamp_utc'))) is not None
+            and LEADERBOARD_REVEAL_START <= ts <= LEADERBOARD_REVEAL_END]
+
+
+def leaderboard_consensus(commits, reveals):
+    return consensus(commits, filter_leaderboard_reveals(reveals))
 
 
 def consensus(commits, reveals):
@@ -152,5 +168,5 @@ def demo_data():
     commits, reveals = [], []
     for uid, number, nonce in [('STU-001', 21, 'demo-a'), ('STU-002', 33, 'demo-b'), ('STU-003', 18, 'demo-c'), ('STU-004', 42, 'demo-d'), ('STU-005', 26, 'demo-e')]:
         commits.append({'uni_id': uid, 'commit': commitment(uid, number, nonce), 'timestamp_utc': '2026-11-14T12:00:00Z'})
-        reveals.append({'uni_id': uid, 'number': str(number), 'nonce': nonce, 'timestamp_utc': '2026-11-16T09:00:00Z'})
+        reveals.append({'uni_id': uid, 'number': str(number), 'nonce': nonce, 'timestamp_utc': '2026-11-16T12:00:00Z'})
     return commits, reveals

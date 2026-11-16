@@ -9,7 +9,8 @@ import pandas as pd
 import streamlit as st
 
 from game import (API_DEFAULT, DEADLINE, REVEAL_OPEN, commitment, consensus,
-                  csv_bytes, demo_data, fetch_table, submit, validate)
+                  csv_bytes, demo_data, fetch_table, submit, validate,
+                  filter_leaderboard_reveals, leaderboard_consensus, LEADERBOARD_WINDOW_LABEL)
 
 st.set_page_config(page_title='Beauty Contest | NEOMA', page_icon='🎯', layout='wide')
 st.markdown('''<style>
@@ -158,6 +159,7 @@ with reveal_tab:
     with left:
         st.subheader('Open your commitment')
         st.write('Enter exactly the same University ID, number and nonce you used when committing.')
+        st.caption('Leaderboard eligibility: reveals recorded on ' + LEADERBOARD_WINDOW_LABEL + '.')
         if not reveal_open:
             st.warning('The reveal window is not open yet.')
         with st.form('reveal_form'):
@@ -201,6 +203,7 @@ with leaderboard_tab:
     title.subheader('The class, in consensus')
     refresh = action.button('Refresh leaderboard', use_container_width=True)
     st.caption('Target = ⅔ × average of verified numbers. The smallest absolute distance wins; ties share the rank.')
+    st.info('Only reveals submitted on ' + LEADERBOARD_WINDOW_LABEL + ' are included. The latest reveal within this window counts for each student.')
     if refresh or (demo and 'snapshot' not in st.session_state):
         try:
             with st.spinner('Reading both ledgers and verifying hashes…'):
@@ -216,7 +219,9 @@ with leaderboard_tab:
     if not snapshot:
         st.info('Click Refresh leaderboard to read the public ledgers, verify reveals and calculate the ranking.')
     else:
-        result = consensus(snapshot['commits'], snapshot['reveals'])
+        eligible_reveals = filter_leaderboard_reveals(snapshot['reveals'])
+        result = leaderboard_consensus(snapshot['commits'], snapshot['reveals'])
+        st.caption(f"{len(eligible_reveals)} of {len(snapshot['reveals'])} reveal entries fall within the leaderboard window.")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric('Verified players', result['count'])
         c2.metric('Class average', '—' if result['average'] is None else f"{result['average']:.3f}")
@@ -226,7 +231,7 @@ with leaderboard_tab:
         if result['winners']:
             st.success('Leading now: ' + ', '.join(result['winners']))
         else:
-            st.info('No verified reveals yet. Results will appear once a reveal matches a commitment.')
+            st.info('No verified reveals within the selected window. Only matching reveals recorded on ' + LEADERBOARD_WINDOW_LABEL + ' count.')
         if result['rows']:
             display = pd.DataFrame(result['rows'])[['Rank', 'University ID', 'Number', 'Distance', 'Status', 'Revealed at (UTC)']]
             display['Rank'] = display['Rank'].astype('Int64')
@@ -238,6 +243,7 @@ with leaderboard_tab:
             with st.expander('Data quality details'):
                 st.dataframe(result['issues'], hide_index=True, use_container_width=True)
         summary = '\n'.join(['BEAUTY CONTEST — CLASS RESULTS', 'Rule: latest reveal + latest prior commit',
+                              'Eligible reveals: ' + LEADERBOARD_WINDOW_LABEL,
                               f"Verified players: {result['count']}", f"Class average: {result['average']}",
                               f"Target (2/3 average): {result['target']}", 'Leaders: ' + ', '.join(result['winners']),
                               'Provisional snapshot: ' + snapshot['loaded_at']])
@@ -248,10 +254,10 @@ with leaderboard_tab:
             st.caption('All commitment attempts. Hashes do not expose the chosen numbers.')
             st.dataframe(pd.DataFrame(snapshot['commits'], columns=['timestamp_utc', 'uni_id', 'commit']), hide_index=True, use_container_width=True)
             st.download_button('Download commits CSV', csv_bytes(snapshot['commits'], ['timestamp_utc', 'uni_id', 'commit']), 'merged_commits.csv', 'text/csv')
-        with st.expander('Public reveal ledger'):
-            st.caption('All reveal attempts. Nonces in this ledger were intentionally made public by their participants.')
-            st.dataframe(pd.DataFrame(snapshot['reveals'], columns=['timestamp_utc', 'uni_id', 'number', 'nonce']), hide_index=True, use_container_width=True)
-            st.download_button('Download reveals CSV', csv_bytes(snapshot['reveals'], ['timestamp_utc', 'uni_id', 'number', 'nonce']), 'merged_reveals.csv', 'text/csv')
+        with st.expander('Reveal ledger · eligible time window'):
+            st.caption('Reveal attempts within the leaderboard window. Nonces in this ledger were intentionally made public by their participants.')
+            st.dataframe(pd.DataFrame(eligible_reveals, columns=['timestamp_utc', 'uni_id', 'number', 'nonce']), hide_index=True, use_container_width=True)
+            st.download_button('Download reveals CSV', csv_bytes(eligible_reveals, ['timestamp_utc', 'uni_id', 'number', 'nonce']), 'merged_reveals.csv', 'text/csv')
 
 st.divider()
 st.caption('NEOMA · Fintech & DeFi · Commit → Reveal → Verify · SHA-256 / append-only ledger')

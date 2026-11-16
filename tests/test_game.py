@@ -7,7 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from game import (API_DEFAULT, DEADLINE, REVEAL_OPEN, commitment, consensus,
-                  csv_bytes, demo_data, fetch_table, parse_ts, submit, validate)
+                  csv_bytes, demo_data, fetch_table, parse_ts, submit, validate,
+                  filter_leaderboard_reveals, leaderboard_consensus)
 
 C_TIME = '2026-11-14T10:00:00Z'
 R_TIME = '2026-11-16T10:00:00Z'
@@ -79,6 +80,50 @@ class ConsensusTests(unittest.TestCase):
         self.assertIsNone(consensus([], [])['target'])
         self.assertEqual(consensus([], [])['count'], 0)
         self.assertIn(b'University ID', csv_bytes([]))
+
+
+class LeaderboardWindowTests(unittest.TestCase):
+    def test_inclusive_paris_boundaries_and_utc_conversion(self):
+        times = [
+            '2026-11-16T11:59:59.999999Z',
+            '2026-11-16T12:00:00Z',
+            '2026-11-16T13:00:00+01:00',
+            '2026-11-16T17:59:59+01:00',
+            '2026-11-16T17:00:00Z',
+            '2026-11-16T17:00:00.000001Z',
+            '2025-11-16T14:00:00+01:00',
+            '2026-11-15T14:00:00+01:00',
+            '2026-11-17T14:00:00+01:00',
+            'invalid',
+            '2026-11-16T14:00:00',
+        ]
+        rows = [reveal(ts=ts) for ts in times]
+        self.assertEqual([r['timestamp_utc'] for r in filter_leaderboard_reveals(rows)], times[1:5])
+
+    def test_filter_precedes_latest_reveal_selection(self):
+        rows = [reveal(n='99', ts='2026-11-16T11:00:00Z'),
+                reveal(ts='2026-11-16T13:00:00Z'),
+                reveal(n='80', ts='2026-11-16T17:00:01Z')]
+        result = leaderboard_consensus([commit()], rows)
+        self.assertEqual(result['count'], 1)
+        self.assertEqual(result['rows'][0]['Number'], 20)
+
+    def test_outside_players_do_not_affect_average_target_or_ranking(self):
+        commits = [commit('A', 20), commit('B', 100)]
+        rows = [reveal('A', '20', ts='2026-11-16T12:00:00Z'),
+                reveal('B', '100', ts='2026-11-16T11:59:59Z')]
+        result = leaderboard_consensus(commits, rows)
+        self.assertEqual([r['University ID'] for r in result['rows']], ['A'])
+        self.assertEqual(result['average'], 20)
+        self.assertAlmostEqual(result['target'], 40 / 3)
+        self.assertEqual(result['winners'], ['A'])
+
+    def test_empty_window_and_commit_history_preserved(self):
+        self.assertEqual(leaderboard_consensus([commit()], [reveal()])['count'], 0)
+        result = leaderboard_consensus([commit(ts='2026-11-14T10:00:00Z')],
+                                       [reveal(ts='2026-11-16T16:00:00Z')])
+        self.assertEqual(result['count'], 1)
+        self.assertEqual(leaderboard_consensus(*demo_data())['count'], 5)
 
 
 class TransportTests(unittest.TestCase):

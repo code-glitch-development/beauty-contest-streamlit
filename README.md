@@ -24,13 +24,17 @@ Open http://localhost:8501. Enable **Demo mode** in the sidebar to test every ph
 - **Reveal:** re-enter the original inputs. Checks the latest public commitment before sending `kind`, `uni_id`, `number`, `nonce`. Number and nonce become public.
 - **Leaderboard:** reads both CSV ledgers, verifies commitments, displays verified and rejected attempts, shared ranks, current leaders, class average and target. Exports leaderboard CSV, results TXT and both public ledgers. Refresh is manual and results remain provisional while reveals continue.
 
+## Leaderboard reveal window
+
+Only reveals whose server `timestamp_utc` falls on **16 November 2026, from 13:00:00 to 18:00:00 Europe/Paris, inclusive**, enter the leaderboard. This equals **12:00:00 to 17:00:00 UTC**. The filter is applied before selecting each student's latest reveal, so a later out-of-window attempt cannot displace an eligible one. The average, target, winners and leaderboard CSV/TXT exports use only verified reveals in this window. The reveal ledger displayed and downloaded in the Leaderboard tab is filtered to the same window. Commit history remains available for hash verification. Timestamps without a timezone cannot enter this window. The same window applies to demo data.
+
 ## Dates and rules
 
 Commit closes on **15 November 2026 at 23:59:59 Europe/Paris**. Reveal opens on **16 November 2026 at 00:00:00 Europe/Paris**. These reproduce the provided clients. On or after 16 November, a disabled live Commit form is expected. Demo mode unlocks both forms with an isolated session-only ledger.
 
 The commitment is exactly `SHA256(uni_id|integer|nonce)` in UTF-8. IDs and nonces are trimmed as in the supplied clients. Nonces are never taken from `info.txt` or shared by default: each participant gets a random one.
 
-Consensus takes each student's latest reveal and the latest commit at or before that reveal. Equal timestamps use the last CSV row. It does not fall back to an older matching commit or reveal. Out-of-range numbers, non-integers, missing nonces and hash mismatches are rejected. Malformed or timezone-naive timestamps are excluded and reported, rather than crashing or silently matching. Distances are sorted numerically; ties within 1e-12 share competition ranks. The target is two thirds of the verified class average.
+Leaderboard consensus takes each student's latest reveal within the eligible window and the latest commit at or before that reveal. Equal timestamps use the last CSV row. It does not fall back to an older matching commit or reveal. Out-of-range numbers, non-integers, missing nonces and hash mismatches are rejected. Malformed or timezone-naive timestamps are excluded and reported, rather than crashing or silently matching. Distances are sorted numerically; ties within 1e-12 share competition ranks. The target is two thirds of the verified class average.
 
 As in the supplied merge script, consensus does not independently exclude late commits or early reveals: the API is responsible for enforcing the phase schedule. The local form checks are convenience checks and can be bypassed by other clients. For reuse with another cohort, update `DEADLINE` / `REVEAL_OPEN` in `game.py` and the displayed date copy in `app.py`.
 
@@ -58,4 +62,4 @@ Tests use local fixtures and mocked HTTP responses. Streamlit smoke tests use `s
 
 ## Development validation in this delivery
 
-17 protocol and mocked transport tests passed. The two Streamlit integration tests were included but skipped because Streamlit could not be installed in the build environment. Python compilation passed. The live API connection and browser rendering have not been verified here.
+21 protocol, leaderboard-window and mocked transport tests passed. The two Streamlit integration tests were included but skipped because Streamlit could not be installed in the build environment. Python compilation passed. The live API connection and browser rendering have not been verified here.
